@@ -20,13 +20,13 @@ hive_df.show(5)
 
 # Data Cleaning: Handle missing values
 hive_df = hive_df.fillna({
-    'scala_tfl_underground.line': 'Unknown',
-    'scala_tfl_underground.route': 'Unknown',
-    'scala_tfl_underground.delay_time': '0'
+    'line': 'Unknown',
+    'route': 'Unknown',
+    'delay_time': '0'
 })
 
 # Create a binary label column: 1 if there is a delay, 0 otherwise
-hive_df = hive_df.withColumn("is_delayed", when(col("scala_tfl_underground.status").contains("Delay"), 1).otherwise(0))
+hive_df = hive_df.withColumn("is_delayed", when(col("status").contains("Delay"), 1).otherwise(0))
 
 # Check dataset balance
 data = hive_df.groupBy('is_delayed').count()
@@ -37,8 +37,8 @@ data.show()
 # ---------------------------
 
 # Index categorical columns
-line_indexer = StringIndexer(inputCol='line', outputCol='line_index')
-route_indexer = StringIndexer(inputCol='route', outputCol='route_index')
+line_indexer = StringIndexer(inputCol='line', outputCol='line_index', handleInvalid='skip')
+route_indexer = StringIndexer(inputCol='route', outputCol='route_index', handleInvalid='skip')
 
 # Assemble features
 assembler = VectorAssembler(inputCols=['line_index', 'route_index'], outputCol='features')
@@ -80,7 +80,7 @@ print("Predicting a single record...")
 
 # Example Record for Prediction
 sample_data = [("Central", "Baker Street")]  # Example line and route
-sample_df = spark.createDataFrame(sample_data, ['scala_tfl_underground.line', 'scala_tfl_underground.route'])
+sample_df = spark.createDataFrame(sample_data, ['line', 'route'])
 
 # Process the sample record
 sample_df = line_indexer.fit(hive_df).transform(sample_df)
@@ -100,7 +100,7 @@ else:
 # 6. Save Predictions to Hive
 # ---------------------------
 
-result_df = predictions.drop('features', 'rawPrediction', 'probability')                        .withColumnRenamed('prediction', 'is_delayed_predicted')
+result_df = predictions.drop('features', 'rawPrediction', 'probability').withColumnRenamed('prediction', 'is_delayed_predicted')
 
 result_df.write.mode("overwrite").saveAsTable("big_datajan2025.tfl_underground_predicted")
 
