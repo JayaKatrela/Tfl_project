@@ -102,7 +102,6 @@ evaluator = MulticlassClassificationEvaluator(
 lr_accuracy = evaluator.evaluate(lr_preds)
 print("Logistic Regression Accuracy: {:.2f}".format(lr_accuracy))
 
-
 # Random Forest Accuracy
 rf_accuracy = evaluator.evaluate(rf_preds)
 print("Random Forest Accuracy: {:.2f}".format(lr_accuracy))
