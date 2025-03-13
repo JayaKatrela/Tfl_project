@@ -1,53 +1,37 @@
-# =======================
-# IMPORT LIBRARIES
-# =======================
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, hour, dayofweek, month, year, regexp_replace
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
-from pyspark.ml.linalg import Vectors
 
-# =======================
-# CREATE SPARK SESSION WITH HIVE SUPPORT
-# =======================
+# Create Spark session with Hive support
 spark = SparkSession.builder \
     .appName("Hive_Spark_Classification") \
     .enableHiveSupport() \
     .getOrCreate()
 
-# =======================
-# READ DATA FROM EXISTING HIVE TABLE
-# =======================
+# Read data from the Hive table
 df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
 df.show(6)
 
-# =======================
-# FEATURE ENGINEERING
-# =======================
+# Ensure no empty or invalid column names
+df = df.select([col(c).alias(c if c else "valid_column_name") for c in df.columns])
+
+# Feature Engineering
 df = df.withColumn('hour', hour(col('timestamp')))
 df = df.withColumn('day_of_week', dayofweek(col('timestamp')))
 df = df.withColumn('month', month(col('timestamp')))
 df = df.withColumn('year', year(col('timestamp')))
 df = df.withColumn('reason', regexp_replace(col('reason'), '[^a-zA-Z0-9 ]', ''))
 
-# =======================
-# STRING INDEXING
-# =======================
+# String Indexing
 indexers = [
-    StringIndexer(inputCol=col, outputCol=col + "_index", handleInvalid="keep").fit(df)
+    StringIndexer(inputCol=col, outputCol=col + "_index", handleInvalid="skip").fit(df)
     for col in ["line", "reason", "route", "status"]
 ]
 for indexer in indexers:
     df = indexer.transform(df)
 
-# =======================
-# HANDLE NULL OR EMPTY VALUES
-# =======================
-df = df.na.fill({"line_index": "Unknown", "reason_index": "Unknown", "route_index": "Unknown"})
-
-# =======================
-# ONE-HOT ENCODING FOR EACH COLUMN
-# =======================
+# One-Hot Encoding for each column
 encoder_line = OneHotEncoder(inputCol="line_index", outputCol="line_vec")
 encoder_reason = OneHotEncoder(inputCol="reason_index", outputCol="reason_vec")
 encoder_route = OneHotEncoder(inputCol="route_index", outputCol="route_vec")
@@ -56,23 +40,17 @@ df = encoder_line.fit(df).transform(df)
 df = encoder_reason.fit(df).transform(df)
 df = encoder_route.fit(df).transform(df)
 
-# =======================
-# VECTOR ASSEMBLER
-# =======================
+# Vector Assembler
 assembler = VectorAssembler(
     inputCols=["hour", "day_of_week", "month", "year", "line_vec", "reason_vec", "route_vec"],
     outputCol="features"
 )
 data = assembler.transform(df).select("features", "status_index")
 
-# =======================
-# TRAIN-TEST SPLIT
-# =======================
+# Train-test split
 train_data, test_data = data.randomSplit([0.8, 0.2], seed=123)
 
-# =======================
-# MODEL TRAINING
-# =======================
+# Model Training
 # Logistic Regression
 lr = LogisticRegression(featuresCol="features", labelCol="status_index")
 lr_model = lr.fit(train_data)
@@ -83,24 +61,18 @@ rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", num
 rf_model = rf.fit(train_data)
 rf_preds = rf_model.transform(test_data)
 
-# =======================
-# CREATE NEW HIVE TABLE AND STORE THE RESULTS
-# =======================
-# Create new table to store logistic regression predictions
+# Create new Hive tables to store predictions
 lr_preds.createOrReplaceTempView("lr_preds_temp")
 spark.sql("""
     CREATE TABLE IF NOT EXISTS tfl_underground_lr_predictions AS
     SELECT * FROM lr_preds_temp
 """)
 
-# Create new table to store random forest predictions
 rf_preds.createOrReplaceTempView("rf_preds_temp")
 spark.sql("""
     CREATE TABLE IF NOT EXISTS big_datajan2025.tfl_underground_rf_predictions AS
     SELECT * FROM rf_preds_temp
 """)
 
-# =======================
-# STOP SPARK SESSION
-# =======================
+# Stop Spark session
 spark.stop()
