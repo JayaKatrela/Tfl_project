@@ -5,8 +5,6 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, hour, dayofweek, month, year, regexp_replace
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
-from pyspark.ml.linalg import Vectors
-from pyspark.ml.feature import VectorAssembler
 
 # =======================
 # CREATE SPARK SESSION WITH HIVE SUPPORT
@@ -15,11 +13,13 @@ spark = SparkSession.builder \
     .appName("Hive_Spark_Classification") \
     .enableHiveSupport() \
     .getOrCreate()
+
 # =======================
 # READ DATA FROM HIVE TABLE
 # =======================
 df = spark.sql("SELECT * FROM scala_tfl_underground")
 df.show(6)
+
 # =======================
 # FEATURE ENGINEERING
 # =======================
@@ -76,11 +76,24 @@ lr = LogisticRegression(featuresCol="features", labelCol="status_index")
 lr_model = lr.fit(train_data)
 lr_preds = lr_model.transform(test_data)
 
+# Save Logistic Regression Predictions to Hive
+lr_preds.write.mode("overwrite").saveAsTable("scala_tfl_lr_predictions")
+
+# Save Logistic Regression Model to Hive
+lr_model.save("hdfs:///models/lr_model")
+
 # Random Forest
 print("Training Random Forest...")
 rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", numTrees=50)
 rf_model = rf.fit(train_data)
 rf_preds = rf_model.transform(test_data)
+
+# Save Random Forest Predictions to Hive
+rf_preds.write.mode("overwrite").saveAsTable("scala_tfl_rf_predictions")
+
+# Save Random Forest Model to Hive
+rf_model.save("hdfs:///models/rf_model")
+
 # =======================
 # STOP SPARK SESSION
 # =======================
