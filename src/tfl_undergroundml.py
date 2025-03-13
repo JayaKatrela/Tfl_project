@@ -100,15 +100,17 @@ evaluator = MulticlassClassificationEvaluator(
 
 # Logistic Regression Accuracy
 lr_accuracy = evaluator.evaluate(lr_preds)
-print(f" Logistic Regression Accuracy: {lr_accuracy:.2f}")
+print("Logistic Regression Accuracy: {:.2f}".format(lr_accuracy))
+
 
 # Random Forest Accuracy
 rf_accuracy = evaluator.evaluate(rf_preds)
-print(f"Random Forest Accuracy: {rf_accuracy:.2f}")
+print("Random Forest Accuracy: {:.2f}".format(lr_accuracy))
+
 
 # XGBoost Accuracy
 xgb_accuracy = evaluator.evaluate(xgb_preds)
-print(f"XGBoost Accuracy: {xgb_accuracy:.2f}")
+print("XGBoost Accurac: {:.2f}".format(lr_accuracy))
 
 
 # =======================
