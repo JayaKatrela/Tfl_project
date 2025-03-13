@@ -100,7 +100,7 @@ else:
 # 6. Save Predictions to Hive
 # ---------------------------
 
-result_df = predictions.drop('features', 'rawPrediction', 'probability') \n                       .withColumnRenamed('prediction', 'is_delayed_predicted')
+result_df = predictions.drop('features', 'rawPrediction', 'probability')                        .withColumnRenamed('prediction', 'is_delayed_predicted')
 
 result_df.write.mode("overwrite").saveAsTable("big_datajan2025.tfl_underground_predicted")
 
