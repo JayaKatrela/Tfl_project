@@ -79,13 +79,13 @@ lr = LogisticRegression(featuresCol="features", labelCol="status_index")
 lr_model = lr.fit(train_data)
 lr_preds = lr_model.transform(test_data)
 
-# ✅ Random Forest
+# Random Forest
 print("Training Random Forest...")
 rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", numTrees=50)
 rf_model = rf.fit(train_data)
 rf_preds = rf_model.transform(test_data)
 
-# ✅ XGBoost
+# XGBoost
 print("Training XGBoost...")
 xgb = XGBClassifier(max_depth=5)
 xgb_model = xgb.fit(train_data.toPandas()["features"].tolist(), train_data.toPandas()["status_index"])
