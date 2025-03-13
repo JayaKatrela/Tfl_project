@@ -73,7 +73,7 @@ train_data, test_data = data.randomSplit([0.8, 0.2], seed=123)
 # MODEL TRAINING AND PREDICTION
 # =======================
 
-# ✅ Logistic Regression
+# Logistic Regression
 print("Training Logistic Regression...")
 lr = LogisticRegression(featuresCol="features", labelCol="status_index")
 lr_model = lr.fit(train_data)
