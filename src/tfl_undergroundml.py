@@ -8,6 +8,7 @@ from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from sparkxgb import XGBoostClassifier
 
+
 # =======================
 # CREATE SPARK SESSION WITH HIVE SUPPORT
 # =======================
@@ -72,19 +73,19 @@ train_data, test_data = data.randomSplit([0.8, 0.2], seed=123)
 # MODEL TRAINING AND PREDICTION
 # =======================
 
-# ✅ Logistic Regression
+# Logistic Regression
 print("Training Logistic Regression...")
 lr = LogisticRegression(featuresCol="features", labelCol="status_index")
 lr_model = lr.fit(train_data)
 lr_preds = lr_model.transform(test_data)
 
-# ✅ Random Forest
+# Random Forest
 print("Training Random Forest...")
 rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", numTrees=50)
 rf_model = rf.fit(train_data)
 rf_preds = rf_model.transform(test_data)
 
-# ✅ XGBoost
+# XGBoost
 print("Training XGBoost...")
 xgb = XGBoostClassifier(featuresCol="features", labelCol="status_index", maxDepth=5)
 xgb_model = xgb.fit(train_data)
@@ -99,15 +100,15 @@ evaluator = MulticlassClassificationEvaluator(
 
 # Logistic Regression Accuracy
 lr_accuracy = evaluator.evaluate(lr_preds)
-print(f"✅ Logistic Regression Accuracy: {lr_accuracy:.2f}")
+print(f" Logistic Regression Accuracy: {lr_accuracy:.2f}")
 
 # Random Forest Accuracy
 rf_accuracy = evaluator.evaluate(rf_preds)
-print(f"✅ Random Forest Accuracy: {rf_accuracy:.2f}")
+print(f"Random Forest Accuracy: {rf_accuracy:.2f}")
 
 # XGBoost Accuracy
 xgb_accuracy = evaluator.evaluate(xgb_preds)
-print(f"✅ XGBoost Accuracy: {xgb_accuracy:.2f}")
+print(f"XGBoost Accuracy: {xgb_accuracy:.2f}")
 
 
 # =======================
