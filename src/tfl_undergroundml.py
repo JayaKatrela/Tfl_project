@@ -7,7 +7,6 @@ from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
 from pyspark.ml.linalg import Vectors
 from pyspark.ml.feature import VectorAssembler
-from xgboost import XGBClassifier
 
 # =======================
 # CREATE SPARK SESSION WITH HIVE SUPPORT
@@ -16,13 +15,11 @@ spark = SparkSession.builder \
     .appName("Hive_Spark_Classification") \
     .enableHiveSupport() \
     .getOrCreate()
-
 # =======================
 # READ DATA FROM HIVE TABLE
 # =======================
 df = spark.sql("SELECT * FROM scala_tfl_underground")
-df.show(5)
-
+df.show(6)
 # =======================
 # FEATURE ENGINEERING
 # =======================
@@ -84,13 +81,6 @@ print("Training Random Forest...")
 rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", numTrees=50)
 rf_model = rf.fit(train_data)
 rf_preds = rf_model.transform(test_data)
-
-# XGBoost
-print("Training XGBoost...")
-xgb = XGBClassifier(max_depth=5)
-xgb_model = xgb.fit(train_data.toPandas()["features"].tolist(), train_data.toPandas()["status_index"])
-xgb_preds = xgb_model.predict(test_data.toPandas()["features"].tolist())
-
 # =======================
 # STOP SPARK SESSION
 # =======================
