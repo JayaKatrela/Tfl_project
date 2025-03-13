@@ -16,7 +16,7 @@ spark = SparkSession.builder.appName("TFL_Underground_Delay_Prediction").enableH
 # ---------------------------
 
 hive_df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
-hive_df.show(5)
+hive_df.show(6)
 
 # Data Cleaning: Handle missing values
 hive_df = hive_df.fillna({
