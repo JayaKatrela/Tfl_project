@@ -1,78 +1,50 @@
+# Import required libraries
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, hour, dayofweek, month, year, regexp_replace
-from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
-from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import VectorAssembler, StringIndexer
+from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
-# Create Spark session with Hive support
+# Initialize Spark session with Hive support
 spark = SparkSession.builder \
-    .appName("Hive_Spark_Classification") \
+    .appName("Hive to Spark ML") \
     .enableHiveSupport() \
     .getOrCreate()
 
-# Read data from the Hive table
-df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
-df.show(6)
+# Load data from Hive table (replace 'database.table_name' with your actual Hive table)
+hive_table = "database.table_name"
+data = spark.sql(f"SELECT * FROM {hive_table}")
 
-# Ensure no empty or invalid column names
-df = df.select([col(c).alias(c if c else "valid_column_name") for c in df.columns])
+# Display the schema and a sample of the data
+data.printSchema()
+data.show(5)
 
-# Feature Engineering
-df = df.withColumn('hour', hour(col('timestamp')))
-df = df.withColumn('day_of_week', dayofweek(col('timestamp')))
-df = df.withColumn('month', month(col('timestamp')))
-df = df.withColumn('year', year(col('timestamp')))
-df = df.withColumn('reason', regexp_replace(col('reason'), '[^a-zA-Z0-9 ]', ''))
+# Handle categorical columns (example with label indexing)
+label_indexer = StringIndexer(inputCol="target_column", outputCol="label")
 
-# String Indexing
-indexers = [
-    StringIndexer(inputCol=col, outputCol=col + "_index", handleInvalid="skip").fit(df)
-    for col in ["line", "reason", "route", "status"]
-]
-for indexer in indexers:
-    df = indexer.transform(df)
+# Assemble feature columns
+feature_cols = [col for col in data.columns if col != 'target_column']
+assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
 
-# One-Hot Encoding for each column
-encoder_line = OneHotEncoder(inputCol="line_index", outputCol="line_vec")
-encoder_reason = OneHotEncoder(inputCol="reason_index", outputCol="reason_vec")
-encoder_route = OneHotEncoder(inputCol="route_index", outputCol="route_vec")
+# Define a simple Logistic Regression model
+lr = LogisticRegression(featuresCol="features", labelCol="label")
 
-df = encoder_line.fit(df).transform(df)
-df = encoder_reason.fit(df).transform(df)
-df = encoder_route.fit(df).transform(df)
+# Create a pipeline
+pipeline = Pipeline(stages=[label_indexer, assembler, lr])
 
-# Vector Assembler
-assembler = VectorAssembler(
-    inputCols=["hour", "day_of_week", "month", "year", "line_vec", "reason_vec", "route_vec"],
-    outputCol="features"
-)
-data = assembler.transform(df).select("features", "status_index")
+# Split the data into training and testing sets
+train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
 
-# Train-test split
-train_data, test_data = data.randomSplit([0.8, 0.2], seed=123)
+# Train the model
+model = pipeline.fit(train_data)
 
-# Model Training
-# Logistic Regression
-lr = LogisticRegression(featuresCol="features", labelCol="status_index")
-lr_model = lr.fit(train_data)
-lr_preds = lr_model.transform(test_data)
+# Make predictions
+predictions = model.transform(test_data)
 
-# Random Forest
-rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", numTrees=50)
-rf_model = rf.fit(train_data)
-rf_preds = rf_model.transform(test_data)
+# Evaluate the model
+evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="accuracy")
+accuracy = evaluator.evaluate(predictions)
+print(f"Model Accuracy: {accuracy:.2f}")
 
-# Create new Hive tables to store predictions
-lr_preds.createOrReplaceTempView("lr_preds_temp")
-spark.sql("""
-    CREATE TABLE IF NOT EXISTS tfl_underground_lr_predictions AS
-    SELECT * FROM lr_preds_temp
-""")
-
-rf_preds.createOrReplaceTempView("rf_preds_temp")
-spark.sql("""
-    CREATE TABLE IF NOT EXISTS big_datajan2025.tfl_underground_rf_predictions AS
-    SELECT * FROM rf_preds_temp
-""")
-
-# Stop Spark session
+# Stop the Spark session
 spark.stop()
