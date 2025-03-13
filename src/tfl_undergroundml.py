@@ -37,8 +37,8 @@ data.show()
 # ---------------------------
 
 # Index categorical columns
-line_indexer = StringIndexer(inputCol='scala_tfl_underground.line', outputCol='line_index')
-route_indexer = StringIndexer(inputCol='scala_tfl_underground.route', outputCol='route_index')
+line_indexer = StringIndexer(inputCol='line', outputCol='line_index')
+route_indexer = StringIndexer(inputCol='route', outputCol='route_index')
 
 # Assemble features
 assembler = VectorAssembler(inputCols=['line_index', 'route_index'], outputCol='features')
