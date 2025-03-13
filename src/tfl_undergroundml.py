@@ -41,13 +41,15 @@ for indexer in indexers:
     df = indexer.transform(df)
 
 # =======================
-# ONE-HOT ENCODING
+# ONE-HOT ENCODING FOR EACH COLUMN
 # =======================
-encoder = OneHotEncoder(
-    inputCols=["line_index", "reason_index", "route_index"],
-    outputCols=["line_vec", "reason_vec", "route_vec"]
-)
-df = encoder.fit(df).transform(df)
+encoder_line = OneHotEncoder(inputCol="line_index", outputCol="line_vec")
+encoder_reason = OneHotEncoder(inputCol="reason_index", outputCol="reason_vec")
+encoder_route = OneHotEncoder(inputCol="route_index", outputCol="route_vec")
+
+df = encoder_line.fit(df).transform(df)
+df = encoder_reason.fit(df).transform(df)
+df = encoder_route.fit(df).transform(df)
 
 # =======================
 # VECTOR ASSEMBLER
@@ -80,10 +82,18 @@ rf_preds = rf_model.transform(test_data)
 # CREATE NEW HIVE TABLE AND STORE THE RESULTS
 # =======================
 # Create new table to store logistic regression predictions
-lr_preds.write.saveAsTable("tfl_underground_lr_predictions", mode="overwrite")
+lr_preds.createOrReplaceTempView("lr_preds_temp")
+spark.sql("""
+    CREATE TABLE IF NOT EXISTS tfl_underground_lr_predictions AS
+    SELECT * FROM lr_preds_temp
+""")
 
 # Create new table to store random forest predictions
-rf_preds.write.saveAsTable("big_datajan2025.tfl_underground_rf_predictions", mode="overwrite")
+rf_preds.createOrReplaceTempView("rf_preds_temp")
+spark.sql("""
+    CREATE TABLE IF NOT EXISTS big_datajan2025.tfl_underground_rf_predictions AS
+    SELECT * FROM rf_preds_temp
+""")
 
 # =======================
 # STOP SPARK SESSION
