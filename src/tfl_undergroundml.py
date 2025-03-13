@@ -5,6 +5,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, hour, dayofweek, month, year, regexp_replace
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
+from pyspark.ml.linalg import Vectors
 
 # =======================
 # CREATE SPARK SESSION WITH HIVE SUPPORT
@@ -15,31 +16,27 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # =======================
-# READ DATA FROM HIVE TABLE
+# READ DATA FROM EXISTING HIVE TABLE
 # =======================
-df = spark.sql("SELECT * FROM scala_tfl_underground")
+df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
 df.show(6)
 
 # =======================
 # FEATURE ENGINEERING
 # =======================
-# Extract time-based features
 df = df.withColumn('hour', hour(col('timestamp')))
 df = df.withColumn('day_of_week', dayofweek(col('timestamp')))
 df = df.withColumn('month', month(col('timestamp')))
 df = df.withColumn('year', year(col('timestamp')))
-
-# Clean 'reason' column (remove special characters)
 df = df.withColumn('reason', regexp_replace(col('reason'), '[^a-zA-Z0-9 ]', ''))
 
 # =======================
-# STRING INDEXING (Convert categorical to numeric)
+# STRING INDEXING
 # =======================
 indexers = [
     StringIndexer(inputCol=col, outputCol=col + "_index", handleInvalid="keep").fit(df)
     for col in ["line", "reason", "route", "status"]
 ]
-
 for indexer in indexers:
     df = indexer.transform(df)
 
@@ -53,7 +50,7 @@ encoder = OneHotEncoder(
 df = encoder.fit(df).transform(df)
 
 # =======================
-# VECTOR ASSEMBLER (Combine all features)
+# VECTOR ASSEMBLER
 # =======================
 assembler = VectorAssembler(
     inputCols=["hour", "day_of_week", "month", "year", "line_vec", "reason_vec", "route_vec"],
@@ -67,32 +64,34 @@ data = assembler.transform(df).select("features", "status_index")
 train_data, test_data = data.randomSplit([0.8, 0.2], seed=123)
 
 # =======================
-# MODEL TRAINING AND PREDICTION
+# MODEL TRAINING
 # =======================
-
 # Logistic Regression
-print("Training Logistic Regression...")
 lr = LogisticRegression(featuresCol="features", labelCol="status_index")
 lr_model = lr.fit(train_data)
 lr_preds = lr_model.transform(test_data)
 
-# Save Logistic Regression Predictions to Hive
-lr_preds.write.mode("overwrite").saveAsTable("scala_tfl_lr_predictions")
-
-# Save Logistic Regression Model to Hive
-lr_model.save("hdfs:///models/lr_model")
-
 # Random Forest
-print("Training Random Forest...")
 rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", numTrees=50)
 rf_model = rf.fit(train_data)
 rf_preds = rf_model.transform(test_data)
 
-# Save Random Forest Predictions to Hive
-rf_preds.write.mode("overwrite").saveAsTable("scala_tfl_rf_predictions")
+# =======================
+# CREATE NEW HIVE TABLE AND STORE THE RESULTS
+# =======================
+# Create new table to store logistic regression predictions
+lr_preds.createOrReplaceTempView("lr_preds_temp")
+spark.sql("""
+    CREATE TABLE IF NOT EXISTS tfl_underground_lr_predictions AS
+    SELECT * FROM lr_preds_temp
+""")
 
-# Save Random Forest Model to Hive
-rf_model.save("hdfs:///models/rf_model")
+# Create new table to store random forest predictions
+rf_preds.createOrReplaceTempView("rf_preds_temp")
+spark.sql("""
+    CREATE TABLE IF NOT EXISTS big_datajan2025.tfl_underground_rf_predictions AS
+    SELECT * FROM rf_preds_temp
+""")
 
 # =======================
 # STOP SPARK SESSION
