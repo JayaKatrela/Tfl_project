@@ -1,22 +1,13 @@
 # =======================
 # IMPORT LIBRARIES
 # =======================
-import subprocess
-import sys
-
-# Install xgboost if not already installed
-subprocess.check_call([sys.executable, "-m", "pip", "install", "xgboost"])
-
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, hour, dayofweek, month, year, regexp_replace
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
-from pyspark.ml.evaluation import MulticlassClassificationEvaluator
-import xgboost as xgb
 from pyspark.ml.linalg import Vectors
 from pyspark.ml.feature import VectorAssembler
-from sparkxgb import XGBoostClassifier
-
+from xgboost import XGBClassifier
 
 # =======================
 # CREATE SPARK SESSION WITH HIVE SUPPORT
@@ -82,56 +73,23 @@ train_data, test_data = data.randomSplit([0.8, 0.2], seed=123)
 # MODEL TRAINING AND PREDICTION
 # =======================
 
-# Logistic Regression
+# ✅ Logistic Regression
 print("Training Logistic Regression...")
 lr = LogisticRegression(featuresCol="features", labelCol="status_index")
 lr_model = lr.fit(train_data)
 lr_preds = lr_model.transform(test_data)
 
-# Random Forest
+# ✅ Random Forest
 print("Training Random Forest...")
 rf = RandomForestClassifier(featuresCol="features", labelCol="status_index", numTrees=50)
 rf_model = rf.fit(train_data)
 rf_preds = rf_model.transform(test_data)
 
-# XGBoost
+# ✅ XGBoost
 print("Training XGBoost...")
-xgb = XGBoostClassifier(featuresCol="features", labelCol="status_index", maxDepth=5)
-xgb_model = xgb.fit(train_data)
-xgb_preds = xgb_model.transform(test_data)
-
-# =======================
-# EVALUATION
-# =======================
-evaluator = MulticlassClassificationEvaluator(
-    labelCol="status_index", predictionCol="prediction", metricName="accuracy"
-)
-
-# Logistic Regression Accuracy
-lr_accuracy = evaluator.evaluate(lr_preds)
-print("Logistic Regression Accuracy: {:.2f}".format(lr_accuracy))
-
-# Random Forest Accuracy
-rf_accuracy = evaluator.evaluate(rf_preds)
-print("Random Forest Accuracy: {:.2f}".format(lr_accuracy))
-
-
-# XGBoost Accuracy
-xgb_accuracy = evaluator.evaluate(xgb_preds)
-print("XGBoost Accurac: {:.2f}".format(lr_accuracy))
-
-
-# =======================
-# SAVE MODEL (Optional)
-# =======================
-# rf_model.save("/tmp/rf_model")
-# xgb_model.save("/tmp/xgb_model")
-
-# =======================
-# LOAD MODEL (Optional)
-# =======================
-# from pyspark.ml.classification import RandomForestClassificationModel
-# rf_model = RandomForestClassificationModel.load("/tmp/rf_model")
+xgb = XGBClassifier(max_depth=5)
+xgb_model = xgb.fit(train_data.toPandas()["features"].tolist(), train_data.toPandas()["status_index"])
+xgb_preds = xgb_model.predict(test_data.toPandas()["features"].tolist())
 
 # =======================
 # STOP SPARK SESSION
