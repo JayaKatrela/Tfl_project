@@ -1,11 +1,20 @@
 # =======================
 # IMPORT LIBRARIES
 # =======================
+import subprocess
+import sys
+
+# Install xgboost if not already installed
+subprocess.check_call([sys.executable, "-m", "pip", "install", "xgboost"])
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, hour, dayofweek, month, year, regexp_replace
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+import xgboost as xgb
+from pyspark.ml.linalg import Vectors
+from pyspark.ml.feature import VectorAssembler
 from sparkxgb import XGBoostClassifier
 
 
