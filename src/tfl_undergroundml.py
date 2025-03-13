@@ -80,18 +80,10 @@ rf_preds = rf_model.transform(test_data)
 # CREATE NEW HIVE TABLE AND STORE THE RESULTS
 # =======================
 # Create new table to store logistic regression predictions
-lr_preds.createOrReplaceTempView("lr_preds_temp")
-spark.sql("""
-    CREATE TABLE IF NOT EXISTS tfl_underground_lr_predictions AS
-    SELECT * FROM lr_preds_temp
-""")
+lr_preds.write.saveAsTable("tfl_underground_lr_predictions", mode="overwrite")
 
 # Create new table to store random forest predictions
-rf_preds.createOrReplaceTempView("rf_preds_temp")
-spark.sql("""
-    CREATE TABLE IF NOT EXISTS big_datajan2025.tfl_underground_rf_predictions AS
-    SELECT * FROM rf_preds_temp
-""")
+rf_preds.write.saveAsTable("big_datajan2025.tfl_underground_rf_predictions", mode="overwrite")
 
 # =======================
 # STOP SPARK SESSION
