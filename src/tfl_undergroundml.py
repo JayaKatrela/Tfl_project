@@ -47,9 +47,11 @@ encoder_line = OneHotEncoder(inputCol="line_index", outputCol="line_vec")
 encoder_reason = OneHotEncoder(inputCol="reason_index", outputCol="reason_vec")
 encoder_route = OneHotEncoder(inputCol="route_index", outputCol="route_vec")
 
-df = encoder_line.fit(df).transform(df)
-df = encoder_reason.fit(df).transform(df)
-df = encoder_route.fit(df).transform(df)
+# Apply transformations without .fit()
+df = encoder_line.transform(df)
+df = encoder_reason.transform(df)
+df = encoder_route.transform(df)
+
 
 # =======================
 # VECTOR ASSEMBLER
