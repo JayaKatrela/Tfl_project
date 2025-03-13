@@ -41,17 +41,20 @@ for indexer in indexers:
     df = indexer.transform(df)
 
 # =======================
+# HANDLE NULL OR EMPTY VALUES
+# =======================
+df = df.na.fill({"line_index": "Unknown", "reason_index": "Unknown", "route_index": "Unknown"})
+
+# =======================
 # ONE-HOT ENCODING FOR EACH COLUMN
 # =======================
 encoder_line = OneHotEncoder(inputCol="line_index", outputCol="line_vec")
 encoder_reason = OneHotEncoder(inputCol="reason_index", outputCol="reason_vec")
 encoder_route = OneHotEncoder(inputCol="route_index", outputCol="route_vec")
 
-# Apply transformations without .fit()
-df = encoder_line.transform(df)
-df = encoder_reason.transform(df)
-df = encoder_route.transform(df)
-
+df = encoder_line.fit(df).transform(df)
+df = encoder_reason.fit(df).transform(df)
+df = encoder_route.fit(df).transform(df)
 
 # =======================
 # VECTOR ASSEMBLER
