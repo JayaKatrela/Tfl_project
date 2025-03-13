@@ -89,12 +89,15 @@ sample_df = assembler.transform(sample_df)
 
 # Make Prediction
 sample_prediction = model.transform(sample_df)
-result = sample_prediction.select("prediction").collect()[0][0]
 
-if result == 1.0:
-    print("This journey is predicted to have a DELAY.")
+if sample_prediction.count() > 0:
+    result = sample_prediction.select("prediction").collect()[0][0]
+    if result == 1.0:
+        print("This journey is predicted to have a DELAY.")
+    else:
+        print("This journey is predicted to be ON TIME.")
 else:
-    print("This journey is predicted to be ON TIME.")
+    print("No prediction could be made for the given input.")
 
 # ---------------------------
 # 6. Save Predictions to Hive
