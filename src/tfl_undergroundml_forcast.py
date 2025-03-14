@@ -13,7 +13,7 @@ spark = SparkSession.builder.appName("TFL_Underground_Status_Forecast").enableHi
 # 2. Load Data from Hive
 # ---------------------------
 hive_df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
-hive_df.show(10)
+hive_df.show(15)
 
 # Data Cleaning: Handle missing values
 hive_df = hive_df.fillna({
