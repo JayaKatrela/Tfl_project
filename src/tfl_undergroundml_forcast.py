@@ -1,88 +1,105 @@
-""
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, when, to_date, date_format
-from pyspark.ml.feature import StringIndexer
-from fbprophet import Prophet
-import pandas as pd
+from pyspark.sql.functions import col, when, month, year
+from pyspark.ml.feature import VectorAssembler, StringIndexer
+from pyspark.ml.regression import LinearRegression
+from pyspark.ml import Pipeline
 
-# -------------------------------------
+# ---------------------------
 # 1. Initialize Spark Session
-# -------------------------------------
-spark = SparkSession.builder.appName("TFL_Underground_Delay_Forecasting").enableHiveSupport().getOrCreate()
+# ---------------------------
 
-# -------------------------------------
+spark = SparkSession.builder.appName("TFL_Underground_Delay_Forecast").enableHiveSupport().getOrCreate()
+
+# ---------------------------
 # 2. Load Data from Hive
-# -------------------------------------
+# ---------------------------
+
 hive_df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
-hive_df.show(5)
+hive_df.show(10)
 
-# -------------------------------------
-# 3. Data Preparation
-# -------------------------------------
+# Data Cleaning: Handle missing values
+hive_df = hive_df.fillna({
+    'line': 'Unknown',
+    'route': 'Unknown',
+    'delay_time': '0'
+})
 
-# Handle missing values
-hive_df = hive_df.fillna({'line': 'Unknown', 'route': 'Unknown', 'delay_time': '0', 'status': 'Good Service'})
+# Ensure delay_time is numeric
+hive_df = hive_df.withColumn("delay_time", col("delay_time").cast("int"))
 
-# Convert timestamp to date and extract useful time-based features
-hive_df = hive_df.withColumn("date", to_date(col("timestamp")))
-hive_df = hive_df.withColumn("day_of_week", date_format(col("date"), "EEEE"))
+# Extract year and month for forecasting
+hive_df = hive_df.withColumn("year", year(col("date"))).withColumn("month", month(col("date")))
 
-# Create binary label: 1 if delayed, 0 if on-time
-hive_df = hive_df.withColumn("is_delayed", when(col("status").contains("Delay"), 1).otherwise(0))
+# ---------------------------
+# 3. Feature Engineering
+# ---------------------------
 
-# -------------------------------------
-# 4. Forecast Delays for Each Line
-# -------------------------------------
+# Index categorical columns
+line_indexer = StringIndexer(inputCol='line', outputCol='line_index', handleInvalid='skip')
+route_indexer = StringIndexer(inputCol='route', outputCol='route_index', handleInvalid='skip')
 
-def forecast_for_line(line_df, line_name, periods=30):
-    print(f"Forecasting for line: {line_name}")
-    
-    # Convert Spark DataFrame to Pandas for Prophet
-    pd_df = line_df.select("date", "is_delayed").groupBy("date").sum("is_delayed").toPandas()
-    pd_df.columns = ["ds", "y"]  # Prophet requires these column names
+# Assemble features
+assembler = VectorAssembler(inputCols=['line_index', 'route_index', 'year', 'month'], outputCol='features')
 
-    # Initialize and train the Prophet model
-    model = Prophet()
-    model.fit(pd_df)
+# ---------------------------
+# 4. Build and Train Forecast Model
+# ---------------------------
 
-    # Create future dates for prediction
-    future = model.make_future_dataframe(periods=periods)
+print("Training the forecasting model...")
 
-    # Forecast
-    forecast = model.predict(future)
-    forecast["line"] = line_name
-    
-    return forecast
+# Prepare data
+prepared_df = line_indexer.fit(hive_df).transform(hive_df)
+prepared_df = route_indexer.fit(prepared_df).transform(prepared_df)
+prepared_df = assembler.transform(prepared_df)
 
-# Get unique lines for forecasting
-lines = [row.line for row in hive_df.select("line").distinct().collect()]
+# Split data into training and testing sets
+train_df, test_df = prepared_df.randomSplit([0.8, 0.2], seed=42)
+print("Training Set: {} rows, Testing Set: {} rows".format(train_df.count(), test_df.count()))
 
-forecast_results = []
+# Linear Regression Model for Forecasting
+lr = LinearRegression(featuresCol='features', labelCol='delay_time', maxIter=10)
 
-# Forecast delays for each line
-for line in lines:
-    line_df = hive_df.filter(col("line") == line)
-    forecast = forecast_for_line(line_df, line, periods=30)  # Forecast for 30 days
-    forecast_results.append(forecast)
+forecast_model = lr.fit(train_df)
 
-# Combine all forecasts
-forecast_df = pd.concat(forecast_results)
+# Evaluate Model
+predictions = forecast_model.transform(test_df)
+predictions.select('features', 'delay_time', 'prediction').show(10)
 
-# -------------------------------------
-# 5. Save Forecasts to Hive
-# -------------------------------------
+# ---------------------------
+# 5. Forecast Future Delays
+# ---------------------------
 
-# Convert Pandas DataFrame back to Spark DataFrame
-spark_forecast_df = spark.createDataFrame(forecast_df)
+print("Generating future forecasts...")
 
-# Save predictions to Hive table
-spark_forecast_df.write.mode("overwrite").saveAsTable("big_datajan2025.tfl_underground_forecast")
+future_data = []
+lines = hive_df.select("line").distinct().rdd.flatMap(lambda x: x).collect()
 
-print("Forecast successfully saved to Hive: big_datajan2025.tfl_underground_forecast")
+for line_name in lines:
+    print("Forecasting for line: {}".format(line_name))
+    for year_val in [2025]:
+        for month_val in range(4, 7):  # Forecast for April, May, June
+            future_data.append((line_name, "Unknown", year_val, month_val))
 
+future_df = spark.createDataFrame(future_data, ['line', 'route', 'year', 'month'])
 
-# -------------------------------------
-# 6. Stop Spark Session
-# -------------------------------------
+future_df = line_indexer.fit(hive_df).transform(future_df)
+future_df = route_indexer.fit(hive_df).transform(future_df)
+future_df = assembler.transform(future_df)
+
+future_predictions = forecast_model.transform(future_df)
+future_predictions.select("line", "year", "month", "prediction").show(20)
+
+# ---------------------------
+# 6. Save Forecast to Hive
+# ---------------------------
+
+result_df = future_predictions.select("line", "year", "month", "prediction")
+result_df.write.mode("overwrite").saveAsTable("big_datajan2025.tfl_underground_forecast")
+
+print("Successfully written to Hive table: big_datajan2025.tfl_underground_forecast")
+
+# ---------------------------
+# 7. Stop Spark Session
+# ---------------------------
 
 spark.stop()
