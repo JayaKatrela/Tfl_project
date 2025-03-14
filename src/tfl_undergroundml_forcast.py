@@ -45,15 +45,27 @@ route_indexer = StringIndexer(inputCol='route', outputCol='route_index', handleI
 assembler = VectorAssembler(inputCols=['line_index', 'route_index', 'year', 'month'], outputCol='features')
 
 # ---------------------------
-# 4. Build and Train Forecast Model
+# 4. Data Preprocessing and Check for Nulls
+# ---------------------------
+
+# Apply StringIndexer and check for null values in critical columns
+prepared_df = line_indexer.fit(hive_df).transform(hive_df)
+prepared_df = route_indexer.fit(prepared_df).transform(prepared_df)
+
+# Ensure no null values in important columns
+prepared_df = prepared_df.fillna({'line_index': 0, 'route_index': 0, 'delay_time': 0})
+
+# Assemble features and check for nulls in the feature column
+prepared_df = assembler.transform(prepared_df)
+
+# Check for null values in features and delay_time
+prepared_df = prepared_df.dropna(subset=["line_index", "route_index", "features", "delay_time"])
+
+# ---------------------------
+# 5. Build and Train Forecast Model
 # ---------------------------
 
 print("Training the forecasting model...")
-
-# Prepare data
-prepared_df = line_indexer.fit(hive_df).transform(hive_df)
-prepared_df = route_indexer.fit(prepared_df).transform(prepared_df)
-prepared_df = assembler.transform(prepared_df)
 
 # Split data into training and testing sets
 train_df, test_df = prepared_df.randomSplit([0.8, 0.2], seed=42)
@@ -69,7 +81,7 @@ predictions = forecast_model.transform(test_df)
 predictions.select('features', 'delay_time', 'prediction').show(10)
 
 # ---------------------------
-# 5. Forecast Future Delays
+# 6. Forecast Future Delays
 # ---------------------------
 
 print("Generating future forecasts...")
@@ -85,15 +97,17 @@ for line_name in lines:
 
 future_df = spark.createDataFrame(future_data, ['line', 'route', 'year', 'month'])
 
+# Index future data and assemble features
 future_df = line_indexer.fit(hive_df).transform(future_df)
 future_df = route_indexer.fit(hive_df).transform(future_df)
 future_df = assembler.transform(future_df)
 
+# Make predictions on future data
 future_predictions = forecast_model.transform(future_df)
 future_predictions.select("line", "year", "month", "prediction").show(20)
 
 # ---------------------------
-# 6. Save Forecast to Hive
+# 7. Save Forecast to Hive
 # ---------------------------
 
 result_df = future_predictions.select("line", "year", "month", "prediction")
@@ -102,7 +116,7 @@ result_df.write.mode("overwrite").saveAsTable("big_datajan2025.tfl_underground_f
 print("Successfully written to Hive table: big_datajan2025.tfl_underground_forecast")
 
 # ---------------------------
-# 7. Stop Spark Session
+# 8. Stop Spark Session
 # ---------------------------
 
 spark.stop()
