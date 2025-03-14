@@ -13,7 +13,7 @@ spark = SparkSession.builder.appName("TFL_Underground_Status_Forecast").enableHi
 # 2. Load Data from Hive
 # ---------------------------
 hive_df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
-hive_df.show(5)
+hive_df.show(10)
 
 # Data Cleaning: Handle missing values
 hive_df = hive_df.fillna({
@@ -101,8 +101,11 @@ for line_name in lines:
 future_df = spark.createDataFrame(future_data, ['line', 'route', 'year', 'month'])
 
 # Apply indexers for future data
-future_df = line_indexer.transform(future_df)
-future_df = route_indexer.transform(future_df)
+line_indexer_model = line_indexer.fit(future_df)  # Fit the StringIndexer model on future_df
+future_df = line_indexer_model.transform(future_df)  # Use the fitted model to transform future_df
+
+route_indexer_model = route_indexer.fit(future_df)  # Fit the StringIndexer model on future_df
+future_df = route_indexer_model.transform(future_df)  # Use the fitted model to transform future_df
 
 # Assemble features for future data (exclude status_index as we are predicting it)
 future_df = assembler.transform(future_df)
