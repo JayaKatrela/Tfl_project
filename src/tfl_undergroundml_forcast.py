@@ -13,17 +13,16 @@ spark = SparkSession.builder.appName("TFL_Underground_Status_Forecast").enableHi
 # 2. Load Data from Hive
 # ---------------------------
 hive_df = spark.sql("SELECT * FROM big_datajan2025.scala_tfl_underground")
-hive_df.show(15)
+hive_df.show(5)
 
 # Data Cleaning: Handle missing values
 hive_df = hive_df.fillna({
     'line': 'Unknown',
     'route': 'Unknown',
-    'delay_time': '0',
     'status': 'Unknown'  # Handle missing status if needed
 })
 
-# Ensure delay_time is numeric
+# Ensure delay_time is numeric, but we won't use it in the features
 hive_df = hive_df.withColumn("delay_time", col("delay_time").cast("int"))
 
 # Identify correct timestamp column
@@ -33,7 +32,7 @@ timestamp_col = [col_name for col_name in hive_df.columns if 'timestamp' in col_
 hive_df = hive_df.withColumn("year", year(col(timestamp_col))).withColumn("month", month(col(timestamp_col)))
 
 # ---------------------------
-# 3. Feature Engineering
+# 3. Feature Engineering (without delay_time)
 # ---------------------------
 
 # Index categorical columns (line, route, and status)
@@ -41,8 +40,8 @@ line_indexer = StringIndexer(inputCol='line', outputCol='line_index', handleInva
 route_indexer = StringIndexer(inputCol='route', outputCol='route_index', handleInvalid='skip')
 status_indexer = StringIndexer(inputCol='status', outputCol='status_index', handleInvalid='skip')
 
-# Assemble features (adding status_index in the feature set)
-assembler = VectorAssembler(inputCols=['line_index', 'route_index', 'status_index', 'year', 'month'], outputCol='features')
+# Assemble features (excluding delay_time)
+assembler = VectorAssembler(inputCols=['line_index', 'route_index', 'year', 'month'], outputCol='features')
 
 # ---------------------------
 # 4. Data Preprocessing and Check for Nulls
@@ -54,7 +53,7 @@ prepared_df = route_indexer.fit(prepared_df).transform(prepared_df)
 prepared_df = status_indexer.fit(prepared_df).transform(prepared_df)
 
 # Ensure no null values in important columns
-prepared_df = prepared_df.fillna({'line_index': 0, 'route_index': 0, 'status_index': 0, 'delay_time': 0})
+prepared_df = prepared_df.fillna({'line_index': 0, 'route_index': 0, 'status_index': 0})
 
 # Assemble features and check for nulls in the feature column
 prepared_df = assembler.transform(prepared_df)
@@ -101,10 +100,11 @@ for line_name in lines:
 # Create a DataFrame for future predictions
 future_df = spark.createDataFrame(future_data, ['line', 'route', 'year', 'month'])
 
-# Index future data and assemble features
-future_df = line_indexer.fit(hive_df).transform(future_df)
-future_df = route_indexer.fit(hive_df).transform(future_df)
-future_df = status_indexer.fit(hive_df).transform(future_df)
+# Apply indexers for future data
+future_df = line_indexer.transform(future_df)
+future_df = route_indexer.transform(future_df)
+
+# Assemble features for future data (exclude status_index as we are predicting it)
 future_df = assembler.transform(future_df)
 
 # Make predictions on future data
