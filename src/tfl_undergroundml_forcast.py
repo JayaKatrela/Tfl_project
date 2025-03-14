@@ -27,8 +27,11 @@ hive_df = hive_df.fillna({
 # Ensure delay_time is numeric
 hive_df = hive_df.withColumn("delay_time", col("delay_time").cast("int"))
 
+# Identify correct timestamp column
+timestamp_col = [col_name for col_name in hive_df.columns if 'timestamp' in col_name.lower()][0]
+
 # Extract year and month for forecasting
-hive_df = hive_df.withColumn("year", year(col("date"))).withColumn("month", month(col("date")))
+hive_df = hive_df.withColumn("year", year(col(timestamp_col))).withColumn("month", month(col(timestamp_col)))
 
 # ---------------------------
 # 3. Feature Engineering
